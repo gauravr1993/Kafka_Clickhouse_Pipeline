@@ -12,12 +12,12 @@ client = Client(
 )
 
 
-def fetch_latest_data(batch_size=1000):
+def fetch_latest_data(last_ts):
     query = f"""
     SELECT device_id, timestamp, temperature
     FROM temperature_data
-    ORDER BY timestamp DESC
-    LIMIT {batch_size}
+    WHERE timestamp > toDateTime('{last_ts}')
+    ORDER BY timestamp
     """
     return client.execute(query)
 

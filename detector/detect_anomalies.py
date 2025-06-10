@@ -1,13 +1,36 @@
 # detector/detect_anomalies.py
 from detector.clickhouse_client import fetch_latest_data, insert_anomalies
 from detector.rules import temperature_threshold, sudden_jump, flat_line
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+import os
+
+
+CHECKPOINT_FILE = "last_processed.txt"
+
+def load_last_timestamp():
+    if not os.path.exists(CHECKPOINT_FILE):
+        # Initialize with a default old timestamp if first run
+        return (datetime.now(timezone.utc) - timedelta(minutes=10)).strftime('%Y-%m-%d %H:%M:%S')
+    with open(CHECKPOINT_FILE, "r") as f:
+        return datetime.fromisoformat(f.read().strip())
+
+def save_last_timestamp(ts: datetime):
+    with open(CHECKPOINT_FILE, "w") as f:
+        f.write(ts.isoformat())
+
 
 
 def detect():
     print("[INFO] Fetching latest sensor data...")
-    data = fetch_latest_data(1000)  # list of tuples from ClickHouse
+
+    last_ts = load_last_timestamp()
+    print(f"[INFO] Fetching sensor data since {last_ts}")
+
+    data = fetch_latest_data(last_ts)  # stored data from ClickHouse
+    if not data:
+        print("[INFO] No new data to process.")
+        return
     # Convert to dict list
     records = [
         {'device_id': d[0], 'timestamp': d[1].isoformat(), 'temperature': d[2]}
@@ -37,8 +60,12 @@ def detect():
             anomalies.append({**points[-1], 'anomaly_type': 'Flatline'})
 
     print(f"[INFO] Found {len(anomalies)} anomalies")
-    insert_anomalies(anomalies)
+    if anomalies:
+        insert_anomalies(anomalies)
 
+    # Update checkpoint to the latest timestamp from current batch
+    latest_ts = max(datetime.fromisoformat(r['timestamp']) for r in records)
+    save_last_timestamp(latest_ts)
 
 if __name__ == "__main__":
     detect()

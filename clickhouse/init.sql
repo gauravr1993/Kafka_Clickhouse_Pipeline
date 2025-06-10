@@ -24,3 +24,13 @@ ORDER BY (device_id, timestamp);
 -- Materialized view to consume Kafka and insert into MergeTree
 CREATE MATERIALIZED VIEW IF NOT EXISTS iot.mv_temperature TO iot.temperature_data AS
 SELECT * FROM iot.temperature_stream;
+
+
+CREATE TABLE IF NOT EXISTS iot.anomalies (
+  device_id String,
+  timestamp DateTime,
+  temperature Float32,
+  anomaly_type String
+) ENGINE = MergeTree
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (device_id, timestamp);
